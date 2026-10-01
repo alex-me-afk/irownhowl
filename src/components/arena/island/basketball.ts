@@ -148,7 +148,7 @@ export function createBasketball(scene: THREE.Scene, onEvent: (e: HoopEvent) => 
 
   const updatePreview = () => {
     const s: Sim = { p: launchP.clone(), v: launchV.clone(), floorY, scored: false, prevY: launchP.y };
-    const arr = arcGeo.attributes.position!.array as Float32Array;
+    const arr = arcGeo.attributes["position"]!.array as Float32Array;
     let landed = false;
     for (let i = 0; i < N; i++) {
       if (!landed) {
@@ -167,7 +167,7 @@ export function createBasketball(scene: THREE.Scene, onEvent: (e: HoopEvent) => 
       arr[i * 3 + 2] = s.p.z;
     }
     if (!landed) landing.position.set(s.p.x, floorY + 0.03, s.p.z);
-    arcGeo.attributes.position!.needsUpdate = true;
+    arcGeo.attributes["position"]!.needsUpdate = true;
   };
 
   return {
