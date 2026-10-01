@@ -1139,7 +1139,7 @@ export default function LoneWolfArena({ onReady, onExit, mapId = "frostline", ga
             if (ev === "score") {
               hoopScore += 1;
               hoopMsg = "Swish! +1";
-              playSfx("ui", 0.6);
+              playSfx("buy", 0.6);
             } else if (ev === "miss" && hoopMsg !== "Swish! +1") hoopMsg = "Missed — try again";
             else if (ev === "rim") hoopMsg = hoopMsg || "Off the rim…";
             hoopMsgT = 1.8;
@@ -4834,6 +4834,8 @@ export default function LoneWolfArena({ onReady, onExit, mapId = "frostline", ga
           const strays: THREE.Object3D[] = [];
           model.traverse((o) => {
             if (/^(?:character|mannequin|dummy)(?:[._-]\d+)?$/i.test(o.name)) strays.push(o);
+            // Friend Island ships a forgotten placeholder cube — never show it.
+            else if (activeMap.id === "friend-island" && ISLAND_STRAY_NODES.has(o.name)) strays.push(o);
           });
           for (const stray of strays) {
             stray.parent?.remove(stray);
@@ -6655,6 +6657,60 @@ export default function LoneWolfArena({ onReady, onExit, mapId = "frostline", ga
         }
       }
 
+      // Friend Island mini-games: proximity prompts + the in-world basketball.
+      if (hoops && human) {
+        const onFoot = !drivingRef.current && human.alive;
+        const station = onFoot && !miniGameOpenRef.current ? nearestStation(walkPos.x, walkPos.z) : null;
+        const court = onFoot && onCourt(walkPos.x, walkPos.z);
+        if (!court && hoops.holding) hoops.setHolding(false);
+        const moving = walkPos.distanceTo(hoopPrevPos) > 0.02 * Math.max(1, dt * 60);
+        hoopPrevPos.copy(walkPos);
+        camera.getWorldDirection(hoopCamDir);
+        hoops.update(dt, walkPos, hoopCamDir, moving);
+        const prompt = station
+          ? station.kind === "arcade"
+            ? "Play arcade (E)"
+            : "Play table games (E)"
+          : court && !hoops.holding && !hoops.inFlight
+            ? "Pick up basketball (E)"
+            : null;
+        if (prompt !== islandPromptCur) {
+          islandPromptCur = prompt;
+          setIslandPrompt(prompt);
+        }
+        if (hoopMsgT > 0) {
+          hoopMsgT -= dt;
+          if (hoopMsgT <= 0) hoopMsg = "";
+        }
+        const showHud = court && (hoops.holding || hoops.inFlight);
+        const p = Math.round(hoops.power * 20) / 20;
+        const key = showHud ? `${hoops.holding}|${hoops.canShoot}|${hoops.charging}|${p}|${hoopScore}|${hoopShots}|${hoopMsg}` : "";
+        if (key !== hoopHudKey) {
+          hoopHudKey = key;
+          setHoopHud(
+            showHud
+              ? { holding: hoops.holding, canShoot: hoops.canShoot, charging: hoops.charging, power: p, score: hoopScore, shots: hoopShots, msg: hoopMsg }
+              : null,
+          );
+        }
+        islandInteractRef.current = () => {
+          if (station) {
+            hoops.setHolding(false);
+            keys.clear();
+            freeCursorRef.current = true;
+            setCursorFree(true);
+            document.exitPointerLock?.();
+            setMiniGame(station.kind);
+            return true;
+          }
+          if (court && !hoops.inFlight) {
+            hoops.setHolding(!hoops.holding);
+            return true;
+          }
+          return false;
+        };
+      }
+
       // automatic / burst fire, run only once the camera is in its final pose. Holstered
       // while driving — no drive-by shooting for now.
       if (pendingFire && !drivingRef.current) {
@@ -7239,6 +7295,7 @@ export default function LoneWolfArena({ onReady, onExit, mapId = "frostline", ga
       }
       // Car enter/exit runs first: E is also the default power key, and the hangout early-return
       // below used to swallow it before the car ever saw it.
+      if (e.code === "KeyE" && hangout && !miniGameOpenRef.current && islandInteractRef.current()) return;
       if (e.code === "KeyE" && carEnterExitRef.current()) return;
       if (hangout && (is("reload") || is("wall") || is("bomb") || is("heal") || is("power") || is("shop") || is("ping") || is("grenade") || is("inhaler") || e.code.startsWith("Digit"))) return;
       if (is("reload") && !isReloadingRef.current) {
