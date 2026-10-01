@@ -88,6 +88,9 @@ import { armorIcon, POWER_ICON, LOOT_ICON, GRENADE_ICON } from "./icons";
 import { addDaySkybox, DAY_HORIZON, type Skybox } from "./skybox";
 import { createImpactFx, type ImpactFx } from "./impactFx";
 import { ARENA_MAPS, type MapId } from "./maps";
+import { IslandMiniGames, type IslandGameMode, stopAllAudio as stopIslandAudio } from "./island/IslandMiniGames";
+import { nearestStation, ISLAND_STRAY_NODES } from "./island/stations";
+import { createBasketball, onCourt, type Basketball } from "./island/basketball";
 import { type GameMode, type MatchType, MODE_RULES, type ModeRules, lossPayout, modeForMap } from "./modes";
 import { rankPointsForMatch, rankTierFromPoints } from "./ranks";
 import { createSkydiveDirector, PLANE_SCALE, type SkydiveDirector, type SkydivePhase } from "./skydive";
@@ -388,6 +391,21 @@ export default function LoneWolfArena({ onReady, onExit, mapId = "frostline", ga
   const [chatUnread, setChatUnread] = useState(0);
   const chatOpenRef = useRef(false);
   chatOpenRef.current = chatOpen;
+  // Friend Island mini-games: arcade cabinets, game tables and the basketball hoops.
+  const [miniGame, setMiniGame] = useState<IslandGameMode>(null);
+  const miniGameOpenRef = useRef(false);
+  miniGameOpenRef.current = miniGame !== null;
+  const [islandPrompt, setIslandPrompt] = useState<string | null>(null);
+  const [hoopHud, setHoopHud] = useState<{ holding: boolean; canShoot: boolean; charging: boolean; power: number; score: number; shots: number; msg: string } | null>(null);
+  const islandInteractRef = useRef<() => boolean>(() => false);
+  const hoopChargeRef = useRef<{ start: () => boolean; release: () => boolean }>({ start: () => false, release: () => false });
+  const closeMiniGame = useCallback(() => {
+    stopIslandAudio();
+    setMiniGame(null);
+    freeCursorRef.current = false;
+    setCursorFree(false);
+    mountRef.current?.querySelector("canvas")?.requestPointerLock?.();
+  }, []);
   const chatSendRef = useRef<(text: string) => void>(() => {});
   /** BR drop-in director (plane flyover + freefall), created once the plane loads */
   const skydiveRef = useRef<SkydiveDirector | null>(null);
@@ -1109,6 +1127,39 @@ export default function LoneWolfArena({ onReady, onExit, mapId = "frostline", ga
 
     const root = new THREE.Group();
     scene.add(root);
+
+    // ---- Friend Island basketball (in-world throw with landing preview) ----
+    let hoopScore = 0;
+    let hoopShots = 0;
+    let hoopMsg = "";
+    let hoopMsgT = 0;
+    const hoops: Basketball | null =
+      mapIdRef.current === "friend-island"
+        ? createBasketball(scene, (ev) => {
+            if (ev === "score") {
+              hoopScore += 1;
+              hoopMsg = "Swish! +1";
+              playSfx("ui", 0.6);
+            } else if (ev === "miss" && hoopMsg !== "Swish! +1") hoopMsg = "Missed — try again";
+            else if (ev === "rim") hoopMsg = hoopMsg || "Off the rim…";
+            hoopMsgT = 1.8;
+          })
+        : null;
+    hoopChargeRef.current = {
+      start: () => !!hoops?.startCharge(),
+      release: () => {
+        const ok = !!hoops?.release();
+        if (ok) {
+          hoopShots += 1;
+          hoopMsg = "";
+        }
+        return ok;
+      },
+    };
+    const hoopPrevPos = new THREE.Vector3();
+    const hoopCamDir = new THREE.Vector3();
+    let islandPromptCur: string | null = null;
+    let hoopHudKey = "";
 
     // ---- Player laser ----
     const laserGeo = new THREE.BufferGeometry().setFromPoints([
@@ -3088,6 +3139,11 @@ export default function LoneWolfArena({ onReady, onExit, mapId = "frostline", ga
     const onContextMenu = (e: MouseEvent) => e.preventDefault();
 
     const onMouseDown = (e: MouseEvent) => {
+      if (miniGameOpenRef.current) return;
+      if (e.button === 0 && hoops?.holding && document.pointerLockElement === renderer.domElement) {
+        hoopChargeRef.current.start();
+        return;
+      }
       if (gameModeRef.current === "hangout") return; // no combat in the hangout
       // while a frost wall ghost is up, the mouse places / cancels it instead of firing
       if (isPlacingWall() && modeRef.current === "walk") {
@@ -3152,6 +3208,10 @@ export default function LoneWolfArena({ onReady, onExit, mapId = "frostline", ga
     };
 
     const onMouseUp = (e: MouseEvent) => {
+      if (e.button === 0 && hoops?.charging) {
+        hoopChargeRef.current.release();
+        return;
+      }
       if (e.button === 2) {
         if (settingsRef.current.adsMode !== "toggle" && adsRef.current) {
           adsRef.current = false;
@@ -4342,6 +4402,7 @@ export default function LoneWolfArena({ onReady, onExit, mapId = "frostline", ga
       radius = Math.max(20, Math.min(420, radius + e.deltaY * 0.25));
     };
     const onKeyDown = (e: KeyboardEvent) => {
+      if (miniGameOpenRef.current) return; // the mini-game owns the keyboard while open
       if (e.code === "Space" && modeRef.current === "walk") e.preventDefault();
       // ` releases / re-grabs the mouse without pausing, F9 toggles collision wireframes
       if (e.code === "Backquote") {
