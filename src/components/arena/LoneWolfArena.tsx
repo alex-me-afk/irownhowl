@@ -7414,6 +7414,7 @@ export default function LoneWolfArena({ onReady, onExit, mapId = "frostline", ga
   return (
     <div className="relative h-full w-full">
       <div ref={mountRef} className="h-full w-full touch-none select-none" />
+      {miniGame && <IslandMiniGames activeGame={miniGame} onExit={closeMiniGame} />}
       {gameMode === "hangout" && onlineCount > 0 && (
         <div className="pointer-events-none absolute left-1/2 top-3 z-30 -translate-x-1/2 rounded-full border border-border bg-background/80 px-3 py-1 text-xs font-semibold text-foreground backdrop-blur">
           ● Online — {onlineCount} {onlineCount === 1 ? "player" : "players"} here
