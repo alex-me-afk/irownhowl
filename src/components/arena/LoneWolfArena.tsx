@@ -7414,6 +7414,7 @@ export default function LoneWolfArena({ onReady, onExit, mapId = "frostline", ga
   return (
     <div className="relative h-full w-full">
       <div ref={mountRef} className="h-full w-full touch-none select-none" />
+      {miniGame && <IslandMiniGames activeGame={miniGame} onExit={closeMiniGame} />}
       {gameMode === "hangout" && onlineCount > 0 && (
         <div className="pointer-events-none absolute left-1/2 top-3 z-30 -translate-x-1/2 rounded-full border border-border bg-background/80 px-3 py-1 text-xs font-semibold text-foreground backdrop-blur">
           ● Online — {onlineCount} {onlineCount === 1 ? "player" : "players"} here
@@ -8157,6 +8158,48 @@ export default function LoneWolfArena({ onReady, onExit, mapId = "frostline", ga
             />
           )}
 
+          {/* Friend Island mini-game prompt + basketball HUD */}
+          {isHangout && !miniGame && !paused && islandPrompt && (
+            <button
+              type="button"
+              className="pointer-events-auto absolute bottom-40 left-1/2 z-20 -translate-x-1/2 rounded-lg bg-background/70 px-4 py-2 text-sm font-semibold text-foreground ring-1 ring-border backdrop-blur active:scale-95"
+              onClick={() => islandInteractRef.current()}
+            >
+              {islandPrompt}
+            </button>
+          )}
+          {isHangout && !miniGame && hoopHud && (
+            <div className="pointer-events-none absolute bottom-40 left-1/2 z-20 flex -translate-x-1/2 flex-col items-center gap-2">
+              <div className="rounded-lg bg-background/70 px-3 py-1 text-xs font-bold text-foreground ring-1 ring-border backdrop-blur">
+                Baskets {hoopHud.score} / {hoopHud.shots}
+                {hoopHud.msg && <span className="ml-2 text-primary">{hoopHud.msg}</span>}
+              </div>
+              {hoopHud.holding && (
+                <>
+                  <div className="h-2 w-48 overflow-hidden rounded-full bg-muted ring-1 ring-border">
+                    <div className="h-full bg-primary transition-[width] duration-75" style={{ width: `${hoopHud.power * 100}%` }} />
+                  </div>
+                  <div className="text-xs font-semibold text-foreground drop-shadow">
+                    {hoopHud.canShoot ? "Hold click to charge · release to shoot · E to drop" : "Stand still to aim"}
+                  </div>
+                  <button
+                    type="button"
+                    className="pointer-events-auto mt-1 rounded-full bg-primary px-6 py-3 text-sm font-bold text-primary-foreground shadow-lg active:scale-95 md:hidden"
+                    onPointerDown={(e) => {
+                      e.stopPropagation();
+                      hoopChargeRef.current.start();
+                    }}
+                    onPointerUp={(e) => {
+                      e.stopPropagation();
+                      hoopChargeRef.current.release();
+                    }}
+                  >
+                    Hold to shoot
+                  </button>
+                </>
+              )}
+            </div>
+          )}
           {/* Drive prompt — on foot next to your car, or seated in it. pointer-events-auto so
               the button itself is tappable on mobile even though the HUD layer isn't. */}
           {MODE_RULES[gameMode].vehicles &&
