@@ -89,7 +89,7 @@ import { addDaySkybox, DAY_HORIZON, type Skybox } from "./skybox";
 import { createImpactFx, type ImpactFx } from "./impactFx";
 import { ARENA_MAPS, type MapId } from "./maps";
 import { IslandMiniGames, type IslandGameMode, stopAllAudio as stopIslandAudio } from "./island/IslandMiniGames";
-import { nearestStation, ISLAND_STRAY_NODES } from "./island/stations";
+import { nearestStation, createStationMarkers, ISLAND_STRAY_NODES } from "./island/stations";
 import { createBasketball, onCourt, type Basketball } from "./island/basketball";
 import { type GameMode, type MatchType, MODE_RULES, type ModeRules, lossPayout, modeForMap } from "./modes";
 import { rankPointsForMatch, rankTierFromPoints } from "./ranks";
@@ -1156,6 +1156,8 @@ export default function LoneWolfArena({ onReady, onExit, mapId = "frostline", ga
         return ok;
       },
     };
+    // GTA-style "stand here" light pillars at every game station and on the court.
+    const stationMarkers = mapIdRef.current === "friend-island" ? createStationMarkers(scene) : null;
     const hoopPrevPos = new THREE.Vector3();
     const hoopCamDir = new THREE.Vector3();
     let islandPromptCur: string | null = null;
